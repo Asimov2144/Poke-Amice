@@ -1,0 +1,3 @@
+# SHA256 checksums
+4a857130794f6efc0cd205f50b23299fc5fa5c28893f1cc903fe5ae79f6bef2c  data/site.sqlite3
+8c37abdbb325770ee44ba94f7fd5e8b20173612f73c538020ea7cc994748a83e  data/manifest.jsonl

@@ -1,0 +1,156 @@
+.mark-shell{max-width:1200px;margin:0 auto;padding:0 clamp(18px,4vw,64px) 80px}
+.identity-bar{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+.identity-bar .identity-status.logged-in{color:var(--accent);font-weight:650}
+
+.mode-select{max-width:760px;margin:0 auto;padding:clamp(40px,8vw,80px) 0 20px;text-align:center}
+.mode-select .eyebrow{font-size:11px;font-weight:700;letter-spacing:.2em;color:var(--accent);margin:0 0 16px}
+.mode-select h1{font-family:Georgia,"Songti SC",serif;font-size:clamp(32px,5vw,48px);font-weight:400;margin:0 0 14px;letter-spacing:-.02em}
+.mode-select .intro{color:var(--muted);font-size:14px;line-height:1.7;max-width:560px;margin:0 auto 40px}
+.game-picker{text-align:left;margin-bottom:28px}
+.game-picker h2{font-family:Georgia,"Songti SC",serif;font-weight:400;font-size:20px;margin:0 0 6px}
+.game-picker .form-hint{margin:0 0 14px}
+.game-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.game-card{text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 14px;cursor:pointer;display:grid;gap:6px;transition:border-color .15s,box-shadow .15s}
+.game-card:hover{border-color:#aaa59a}
+.game-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.game-card strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.game-card small{color:var(--muted);font-size:10px}
+.game-card-bar{height:4px;border-radius:999px;background:var(--line);overflow:hidden}
+.game-card-bar span{display:block;height:100%;background:var(--accent)}
+.game-card-any{display:flex;flex-direction:column;justify-content:center;background:var(--card)}
+
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;text-align:left}
+.mode-card{background:var(--card);border-radius:var(--radius);padding:24px}
+.mode-card h2{font-family:Georgia,"Songti SC",serif;font-weight:400;font-size:22px;margin:0 0 6px}
+.mode-card>p{color:var(--muted);font-size:13px;margin:0 0 16px}
+.category-pills{display:flex;flex-wrap:wrap;gap:8px}
+.category-pill{border:1px solid var(--line);background:#fff;border-radius:999px;padding:9px 16px;font-size:13px;color:var(--ink);cursor:pointer;transition:border-color .15s,background .15s,color .15s}
+.category-pill:hover{border-color:var(--accent);color:var(--accent)}
+@media(max-width:640px){.mode-grid{grid-template-columns:1fr}}
+
+.quiz-shell{max-width:1200px;margin:0 auto;padding-top:24px}
+.stats-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);margin-bottom:20px;position:sticky;top:0;background:var(--paper);z-index:2}
+.stats-values{display:flex;gap:14px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.stats-values span{transition:color .2s,transform .2s}
+.stats-values span.pulse{color:var(--accent);transform:scale(1.12)}
+
+/* 宽屏下图片和问题面板左右分栏，尽量把整张卡片（图 + 问题 + 按钮）塞进一屏，减少反复上下
+   拖动：拖一次滚动条，图片就滚出视口，要点开确认还得再滚回去，来回很难受。两栏各自用
+   max-height 卡住不超过一屏，字段多到放不下时只有问题区自己滚动，图片和按钮位置不动；
+   操作按钮再叠一层 sticky 兜底。窄屏（手机）下退回单栏堆叠，见下面的 media query。 */
+.quiz-card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);display:grid;grid-template-columns:minmax(0,1.6fr) minmax(320px,1fr)}
+.quiz-image-wrap{position:relative;background:#111;display:flex;align-items:center;justify-content:center;min-height:0;max-height:min(calc(100vh - 180px),760px);overflow:hidden;cursor:zoom-in}
+.quiz-image-wrap img{width:100%;height:auto;max-height:min(calc(100vh - 180px),760px);object-fit:contain;display:block}
+/* 放大：图片切到原始分辨率显示，容器变成可滚动，靠原生滚动条平移查看细节；
+   再点一次缩回上面 fit-to-container 的大小。 */
+.quiz-image-wrap.zoomed{align-items:flex-start;justify-content:flex-start;overflow:auto;cursor:zoom-out}
+.quiz-image-wrap.zoomed img{width:auto;height:auto;max-width:none;max-height:none}
+.quiz-image-hint{position:absolute;right:10px;bottom:10px;background:rgba(20,21,19,.72);color:#fff;font-size:10px;padding:5px 8px;border-radius:999px;pointer-events:none;backdrop-filter:blur(4px)}
+.quiz-panel{display:flex;flex-direction:column;min-height:0;max-height:min(calc(100vh - 180px),760px)}
+.quiz-panel-scroll{flex:1;min-height:0;overflow-y:auto;padding:22px 22px 14px}
+.quiz-game{font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.08em;margin:0 0 10px}
+.quiz-ocr{white-space:pre-wrap;line-height:1.75;font-size:13px;color:#3e403d;margin:0 0 18px;max-height:140px;overflow:auto;padding:12px;background:rgba(255,255,255,.5);border-radius:10px}
+.quiz-ocr:empty::before{content:"（这张图没有识别到文字）";color:#999}
+.quiz-question{font-size:14px;font-weight:650;margin:0 0 14px}
+
+.case-fields{display:grid;gap:18px;margin-bottom:14px}
+.case-field{padding-top:14px;border-top:1px solid var(--line)}
+.case-field:first-child{padding-top:0;border-top:0}
+.case-field.is-none .chip-input-wrap{opacity:.5}
+.case-field-none{margin-top:2px}
+.case-field.is-none .case-field-none{color:var(--accent);font-weight:650}
+
+.chip-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;min-height:0}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 8px 6px 12px;font-size:12px}
+.chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:2px}
+.chip button:hover{color:var(--accent)}
+.chip-input-wrap{position:relative;margin-bottom:14px}
+.chip-input-wrap input{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:11px 13px;font-size:14px;outline:0}
+.chip-input-wrap input:focus{border-color:var(--accent)}
+.suggest-dropdown{position:absolute;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);z-index:3;max-height:220px;overflow:auto}
+.suggest-item{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:0;background:none;text-align:left;padding:9px 13px;font-size:13px;cursor:pointer}
+.suggest-item:hover{background:var(--card)}
+.suggest-item small{color:var(--muted);font-size:10px}
+
+.quiz-actions,.verify-actions{position:sticky;bottom:0;flex:none;padding:14px 22px 22px;border-top:1px solid var(--line);background:var(--card);box-shadow:0 -8px 16px -12px rgba(0,0,0,.18)}
+.quiz-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap}
+.quiz-actions .submit-button{width:auto;padding:10px 18px}
+.case-invalid-button{color:#a13b35}
+.case-invalid-button:hover{color:#a13b35;text-decoration:underline}
+
+.verify-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.verify-button{border:0;border-radius:10px;padding:14px 8px;font-size:13px;font-weight:650;cursor:pointer;color:#fff;transition:filter .15s}
+.verify-button:hover{filter:brightness(.94)}
+.verify-wrong{background:#a13b35}
+.verify-unsure{background:#8a8674}
+.verify-correct{background:#287b54}
+
+.empty-pool{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-pool strong{display:block;color:var(--ink);font-family:Georgia,"Songti SC",serif;font-size:22px;font-weight:400;margin-bottom:10px}
+
+.quiz-toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,12px);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:20}
+.quiz-toast.show{opacity:1;transform:translate(-50%,0)}
+
+.auth-dialog{width:min(92vw,420px);border-radius:20px;background:var(--paper);padding:38px}
+.auth-tabs{display:flex;gap:6px;margin:18px 0 16px;border-bottom:1px solid var(--line)}
+.auth-tab{border:0;background:none;padding:9px 4px;margin-right:14px;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+.auth-tab.active{color:var(--ink);border-bottom-color:var(--accent);font-weight:650}
+.auth-form{display:grid;gap:11px}
+.auth-form label{display:grid;gap:5px;color:var(--muted);font-size:11px}
+.auth-form input{width:100%;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.7);color:var(--ink);padding:9px 10px;font-size:13px;outline:0}
+.auth-form input:focus{border-color:var(--accent)}
+.inline-field{display:flex;gap:7px}
+.inline-field input{flex:1;min-width:0}
+.inline-field .text-button{white-space:nowrap;border:1px solid var(--line);border-radius:8px;padding:0 10px}
+
+@keyframes markPulse{0%{transform:scale(1)}40%{transform:scale(1.12)}100%{transform:scale(1)}}
+
+.leaderboard{width:min(92vw,480px);max-height:82vh;border-radius:20px;background:var(--paper);padding:42px;overflow:auto}
+.leaderboard h2{font-family:Georgia,"Songti SC",serif;font-weight:400;font-size:28px;margin:0 0 10px}
+.leaderboard-list{display:grid;gap:6px;margin-top:16px}
+.leaderboard-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:#e7e2d8;font-size:13px}
+.leaderboard-row:nth-child(1) .leaderboard-rank{color:#c9971f}
+.leaderboard-row:nth-child(2) .leaderboard-rank{color:#8a8674}
+.leaderboard-row:nth-child(3) .leaderboard-rank{color:#a1673f}
+.leaderboard-row.is-guest .leaderboard-name{color:var(--muted)}
+.leaderboard-rank{font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.leaderboard-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:650}
+.leaderboard-level{color:var(--accent);font-size:11px;font-weight:700}
+.leaderboard-xp{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.leaderboard-me{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.leaderboard-me-label{display:block;font-size:10px;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
+.leaderboard-me .leaderboard-row{background:#dfe8df;outline:1px solid var(--accent)}
+
+.round-complete{background:var(--card);border-radius:var(--radius);padding:32px;text-align:center}
+.round-complete .eyebrow{font-size:11px;font-weight:700;letter-spacing:.2em;color:var(--accent);margin:0 0 10px}
+.round-complete h2{font-family:Georgia,"Songti SC",serif;font-weight:400;font-size:28px;margin:0 0 18px}
+.round-complete h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:26px 0 12px;text-align:left}
+.round-stats{display:flex;justify-content:center;gap:28px}
+.round-stats span{font-size:12px;color:var(--muted)}
+.round-stats strong{display:block;font-family:Georgia,"Songti SC",serif;font-size:26px;color:var(--ink);font-weight:400}
+.round-complete .leaderboard-list{text-align:left}
+.round-progress{text-align:left}
+.progress-bar{height:8px;border-radius:999px;background:var(--line);overflow:hidden;margin-bottom:8px}
+.progress-bar span{display:block;height:100%;background:var(--accent)}
+.round-progress p{margin:0;font-size:12px;color:var(--muted)}
+.round-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:26px}
+.round-actions .submit-button{width:auto;padding:12px 22px}
+
+@media(max-width:900px){
+  .quiz-card{grid-template-columns:1fr}
+  /* 单栏时整页一起滚动，图片改用 sticky 钉在状态条下面——往下滚看问题/按钮时图片不会
+     滚出视口。top 值要卡在 .stats-bar 的渲染高度下面，两个 sticky 元素才不会叠在一起。 */
+  .quiz-image-wrap{position:sticky;top:48px;z-index:1;max-height:46vh}
+  .quiz-image-wrap img{max-height:46vh}
+  .quiz-image-wrap.zoomed{position:static;max-height:none}
+  .quiz-image-wrap.zoomed img{max-height:none}
+  .quiz-panel{max-height:none}
+  .quiz-panel-scroll{overflow-y:visible}
+}
+@media(max-width:640px){
+  .quiz-image-wrap{min-height:200px;max-height:44vh}
+  .quiz-image-wrap img{max-height:44vh}
+  .quiz-panel-scroll{padding:18px 18px 12px}
+  .verify-actions{grid-template-columns:1fr}
+}
+@media(max-width:480px){.leaderboard{padding:30px 20px}.round-complete{padding:24px 18px}}

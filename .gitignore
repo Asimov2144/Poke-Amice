@@ -1,0 +1,22 @@
+# 运行时数据 / 备份，不进版本库（体积大，而且是生成产物，不是代码）
+data/
+backups/
+staging/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.sqlite3.backup-*
+server_db_delta_*.zip
+corpus2.zip
+
+# 密钥，绝不能提交
+.event_auth_secret.env
+
+# 未被代码引用的根目录大图（assets/ 下真正用到的 logo 已经单独保留）
+/snap.png
+/snap2.png
+/snap3.png
+
+# 常见杂项
+.DS_Store
+*.log

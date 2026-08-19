@@ -1,0 +1,534 @@
+openapi: 3.1.0
+info:
+  title: PokeAmice Game Gallery API
+  version: 1.0.0
+  description: Stable public API for the PokeAmice game screenshot gallery.
+servers:
+  - url: https://pokeamice.com/game_gallery/api/v1
+paths:
+  /index.php:
+    get:
+      summary: Discover v1 endpoints
+      responses:
+        '200':
+          description: API discovery document
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+  /version.php:
+    get:
+      summary: Read API and dataset versions
+      responses:
+        '200':
+          description: Current versions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+  /health.php:
+    get:
+      summary: Check API and database health
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+  /meta.php:
+    get:
+      summary: Read gallery totals, games and correction categories
+      responses:
+        '200':
+          description: Gallery metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+  /screenshots.php:
+    get:
+      summary: List or search screenshots with cursor pagination
+      parameters:
+        - name: q
+          in: query
+          description: >-
+            OCR/filename/tag/corpus substring search. A single-word q is
+            first resolved against the Pokémon name dictionary (alias, exact
+            zh/en/jp, pinyin, then bounded-edit-distance fuzzy) and, on a
+            hit, also matches that Pokémon's other language names; see
+            meta.resolved_pokemon in the response and README.md.
+          schema: { type: string, maxLength: 80 }
+        - name: game
+          in: query
+          schema: { type: string, maxLength: 80 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [id_desc, id_asc], default: id_desc }
+        - name: include_variants
+          in: query
+          schema: { type: boolean, default: false }
+        - name: expand_evolution
+          in: query
+          description: >-
+            Only takes effect when q resolves to a known Pokémon. Also
+            matches every other member of its evolution family.
+          schema: { type: boolean, default: false }
+        - name: cursor
+          in: query
+          description: Opaque cursor returned by the preceding response.
+          schema: { type: string, maxLength: 512 }
+      responses:
+        '200':
+          description: Screenshot page
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items]
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: '#/components/schemas/ScreenshotSummary' }
+        '400':
+          description: Invalid filter or cursor
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /screenshot.php:
+    get:
+      summary: Read one screenshot and its related story data
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Screenshot detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [screenshot]
+                        properties:
+                          screenshot: { $ref: '#/components/schemas/ScreenshotDetail' }
+        '404':
+          description: Screenshot not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /corrections.php:
+    options:
+      summary: CORS preflight
+      responses:
+        '204': { description: Preflight accepted }
+    post:
+      summary: Submit a screenshot correction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorrectionRequest'
+      responses:
+        '201':
+          description: Correction created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+        '422':
+          description: Invalid correction
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: Rate limited
+          headers:
+            Retry-After: { schema: { type: integer } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /tagging/index.php:
+    get:
+      summary: Discover tagging endpoints
+      responses:
+        '200':
+          description: Tagging API discovery document
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+  /tagging/next_case.php:
+    get:
+      summary: Get the next multi-field Case for a screenshot (labeling, Phase 1 flow)
+      description: >-
+        Like next_label.php but not scoped to a single category: picks a screenshot that
+        is missing evidence for at least one of 宝可梦/人物/地点 and returns all of the
+        missing categories at once in data.missing_fields, so the client can render one
+        field block per missing category on the same card. Requires either an
+        Authorization: Bearer <event token> header or an X-GG-Guest-Id: <uuid> header.
+      parameters:
+        - name: game
+          in: query
+          required: false
+          schema: { type: string }
+          description: Canonical game name from games_progress.php's `game` field. Omit for no filter.
+      responses:
+        '200':
+          description: Next Case candidate (data.card is null when the pool is exhausted)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+  /tagging/submit_case.php:
+    post:
+      summary: Submit answers for one or more fields of a Case in a single request
+      description: >-
+        Body: { screenshot_id, fields: [{ category, answer_kind: 'present'|'none_of_above'|'skip',
+        answers?: [{ raw_input }] }] }. Loops the same per-field canonical resolution
+        submit_label.php uses; xp is summed across fields and the streak/labels_submitted
+        counters increase by the number of non-skip fields in this one submission.
+      responses:
+        '201':
+          description: Fields recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+        '422':
+          description: Invalid field
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /tagging/games_progress.php:
+    get:
+      summary: Per-game labeling coverage, for the "choose a game" screen
+      description: >-
+        No identity required. Returns each canonical game's screenshot count and an
+        MVP-caliber coverage ratio (glossary_matches evidence OR any label_submissions,
+        regardless of confirmation status — see the dev spec's data-update section).
+      responses:
+        '200':
+          description: Per-game coverage list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+  /tagging/next_label.php:
+    get:
+      summary: Get the next unlabeled screenshot for a category (labeling mode)
+      description: >-
+        Requires either an Authorization: Bearer <event token> header or an
+        X-GG-Guest-Id: <uuid> header to identify the player. Returns a
+        screenshot the caller has not yet answered for this category, plus
+        their current xp/level/streak.
+      parameters:
+        - name: category
+          in: query
+          required: true
+          schema: { type: string, enum: ['宝可梦', '人物', '地点'] }
+      responses:
+        '200':
+          description: Next labeling candidate (data.card is null when the pool is exhausted)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+        '401':
+          description: Missing both a valid Bearer token and X-GG-Guest-Id
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /tagging/submit_label.php:
+    post:
+      summary: Submit a labeling-mode answer
+      description: >-
+        Body: { screenshot_id, category, answer_kind: 'present'|'none_of_above'|'skip',
+        answers?: [{ raw_input }] }. Server-side resolves each raw_input against
+        the Pokémon dictionary or the glossary_matches term list before storing;
+        unresolved input is kept as free text rather than discarded. Never
+        writes to the read-only site dataset — all answers land in a pending
+        review queue.
+      responses:
+        '201':
+          description: Answer recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+        '422':
+          description: Invalid answer
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: Rate limited
+          headers:
+            Retry-After: { schema: { type: integer } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /tagging/next_verify.php:
+    get:
+      summary: Get the next claim to verify for a category (verification mode)
+      description: >-
+        Candidates are drawn from OCR-derived glossary matches, crowd-submitted
+        labels pending review, and — for category=剧情 only — screenshot_corpus_matches
+        rows flagged needs_review.
+      parameters:
+        - name: category
+          in: query
+          required: true
+          schema: { type: string, enum: ['宝可梦', '人物', '地点', '剧情'] }
+      responses:
+        '200':
+          description: Next verification candidate (data.card is null when the pool is exhausted)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+  /tagging/submit_verify.php:
+    post:
+      summary: Submit a verification vote (正确/错误/不确定)
+      description: >-
+        Body: { screenshot_id, category, target_type, target_key, claim_text?,
+        vote }. Never mutates glossary_matches/screenshot_corpus_matches
+        directly — once enough independent 错误 votes accumulate on the same
+        claim, one row is auto-filed into the existing correction_reports
+        table for human review, the same table the 勘误 feature uses.
+      responses:
+        '201':
+          description: Vote recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+        '422':
+          description: Invalid vote
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /tagging/suggest.php:
+    get:
+      summary: Glossary-backed autocomplete/typo-correction for label input
+      parameters:
+        - name: category
+          in: query
+          required: true
+          schema: { type: string, enum: ['宝可梦', '人物', '地点'] }
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, maxLength: 40 }
+      responses:
+        '200':
+          description: Ranked canonical-term candidates
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+  /tagging/leaderboard.php:
+    get:
+      summary: Top contributors by xp (labeling + verification combined)
+      description: >-
+        Public endpoint, no identity headers required. If an Authorization:
+        Bearer <event token> or X-GG-Guest-Id header is present, data.me
+        additionally reports the caller's own rank/xp even when they are
+        outside the top list (null if they have no xp yet).
+      responses:
+        '200':
+          description: Ranked contributor list plus optional data.me
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+components:
+  schemas:
+    ResponseMeta:
+      type: object
+      required: [api_version, contract_version, request_id]
+      properties:
+        api_version: { type: string, const: v1 }
+        contract_version: { type: string, const: 1.0.0 }
+        request_id: { type: string }
+        dataset_version: { type: string }
+        pagination:
+          type: object
+          properties:
+            limit: { type: integer }
+            sort: { type: string }
+            has_more: { type: boolean }
+            next_cursor: { type: [string, 'null'] }
+    SuccessEnvelope:
+      type: object
+      required: [ok, data, meta]
+      properties:
+        ok: { type: boolean, const: true }
+        data: {}
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+    ErrorEnvelope:
+      type: object
+      required: [ok, error, meta]
+      properties:
+        ok: { type: boolean, const: false }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+    ScreenshotSummary:
+      type: object
+      required: [id, game, source_game, filename, text, tags, thumb_url, preview_url]
+      properties:
+        id: { type: integer }
+        game: { type: string }
+        source_game: { type: string }
+        archive_label: { type: string }
+        filename: { type: string }
+        width: { type: [integer, 'null'] }
+        height: { type: [integer, 'null'] }
+        text: { type: string }
+        tags: { type: array, items: { type: string } }
+        thumb_url: { type: string, format: uri }
+        preview_url: { type: string, format: uri }
+        contributor: { type: string }
+        variant_count: { type: integer }
+        term_count: { type: integer }
+        story_score: { type: number }
+        created_at: { type: number }
+        updated_at: { type: number }
+        match_tier:
+          type: [string, 'null']
+          enum: [primary, family, null]
+          description: >-
+            Set only when q resolved to a Pokémon. "primary" = matches the
+            Pokémon itself; "family" = only matches via expand_evolution's
+            evolution family. Primary rows are always returned before family
+            rows. null when q didn't resolve to a Pokémon.
+    ScreenshotDetail:
+      type: object
+      required:
+        - id
+        - game
+        - source_game
+        - filename
+        - text
+        - tags
+        - thumb_url
+        - preview_url
+        - submission_variants
+        - glossary
+        - corpus_matches
+        - translations
+        - story_context
+        - version_matches
+        - story_sequence
+      properties:
+        id: { type: integer }
+        game: { type: string }
+        source_game: { type: string }
+        archive_label: { type: string }
+        filename: { type: string }
+        width: { type: [integer, 'null'] }
+        height: { type: [integer, 'null'] }
+        text: { type: string }
+        note: { type: string }
+        contributor: { type: string }
+        tags: { type: array, items: { type: string } }
+        thumb_url: { type: string, format: uri }
+        preview_url: { type: string, format: uri }
+        created_at: { type: number }
+        updated_at: { type: number }
+        submission_variants:
+          type: array
+          items: { $ref: '#/components/schemas/RelatedScreenshot' }
+        glossary:
+          type: array
+          items: { $ref: '#/components/schemas/GlossaryMatch' }
+        corpus_matches:
+          type: array
+          items: { $ref: '#/components/schemas/CorpusMatch' }
+        translations:
+          type: array
+          items: { $ref: '#/components/schemas/Translation' }
+        story_context:
+          type: array
+          items: { $ref: '#/components/schemas/StoryContextLine' }
+        version_matches:
+          type: array
+          items: { $ref: '#/components/schemas/RelatedScreenshot' }
+        story_sequence:
+          type: array
+          items: { $ref: '#/components/schemas/RelatedScreenshot' }
+    RelatedScreenshot:
+      type: object
+      required: [id, game, source_game]
+      properties:
+        id: { type: integer }
+        game: { type: string }
+        source_game: { type: string }
+        archive_label: { type: string }
+        filename: { type: string }
+        text: { type: string }
+        contributor: { type: string }
+        thumb_url: { type: string, format: uri }
+        preview_url: { type: string, format: uri }
+        line_no: { type: integer }
+        score: { type: number }
+        text_id: { type: string }
+        created_at: { type: number }
+    GlossaryMatch:
+      type: object
+      required: [category, canonical, alias, language, source]
+      properties:
+        category: { type: string }
+        canonical: { type: string }
+        alias: { type: string }
+        language: { type: string }
+        source: { type: string }
+    CorpusMatch:
+      type: object
+      required: [text_id, score, collection, language, file_key, text_file, line_no, text, matched_text, match_status, review_reasons]
+      properties:
+        text_id: { type: string }
+        score: { type: number }
+        collection: { type: string }
+        language: { type: string }
+        file_key: { type: string }
+        text_file: { type: string }
+        line_no: { type: integer }
+        text: { type: string }
+        matched_text: { type: string }
+        match_status: { type: string }
+        review_reasons: { type: array, items: { type: string } }
+    Translation:
+      type: object
+      required: [language, label, text]
+      properties:
+        language: { type: string }
+        label: { type: string }
+        text: { type: string }
+    StoryContextLine:
+      type: object
+      required: [line_no, text, current, screenshots]
+      properties:
+        line_no: { type: integer }
+        text: { type: string }
+        current: { type: boolean }
+        screenshots:
+          type: array
+          items: { $ref: '#/components/schemas/RelatedScreenshot' }
+    CorrectionRequest:
+      type: object
+      required: [screenshot_id, category]
+      properties:
+        screenshot_id: { type: integer, minimum: 1 }
+        category:
+          type: string
+          enum: [OCR文字错误, 剧情匹配错误, 截图信息错误, 其他问题]
+        suggested_text: { type: string, maxLength: 2000 }
+        description: { type: string, maxLength: 2000 }
+        contact: { type: string, maxLength: 200 }
