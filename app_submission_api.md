@@ -349,7 +349,140 @@ POST /admin/migrate-tour-accounts
 
 ---
 
-## 4. 小结：投稿类接口一览
+## 4. AI 辅助解析（event，投稿宝事时的"一键填表"）
+
+网页端投稿宝事的表单（`EventFormModal.tsx`）不是让用户从头手填每个字段，而是"粘贴一段文案/链接 →
+AI 解析出结构化字段 → 用户核对一下再提交"。这一组接口就是那个"一键解析"，都在 `event` 下，
+**目前都不需要登录、也没有限流**（和 3.1/3.2 那些真正写数据的接口不一样，这几个只解析不落库，
+但每次调用都会实际打一次 DeepSeek API，是要花钱的——App 端建议自己在客户端做一次节流/去抖，
+不要允许用户手滑连续点很多次）。
+
+### 4.1 核心：文案一键解析成完整宝事草稿
+
+这是最常用的一个——把公告文案（可以直接把微博/推特/官网链接也粘贴在文本里）丢进去，AI 会连着链接
+内容一起抓、一起解析，直接吐出一份可以拿去 `POST /events` 的草稿。
+
+**同步版**（文本短、链接少的时候直接用，注意如果内容里有链接需要抓取会比较慢，建议客户端超时设
+30 秒以上）：
+```http
+POST /parse-event
+Content-Type: application/json
+
+{ "text": "string，必填，公告原文，可以包含 http(s) 链接，最长 50000 字，最多识别文本里的 5 个链接" }
+```
+响应：`{ "success": true, "data": { ...完整字段，见下方 schema } }`；失败时 `{ "error": "..." }`。
+
+**异步版**（推荐 App 端用这个，避免长连接超时）：
+```http
+POST /parse-event-job
+{ "text": "..." }
+→ 202 { "jobId": "32位hex", "status": "running" }
+
+GET /parse-event-job/:jobId
+→ 202 { "status": "running" }                          还没好，继续轮询
+→ 200/其他状态码 { "success": true, "data": {...} }      解析完成，和同步版数据格式一样
+```
+`jobId` 10 分钟没取走会被清理，轮询建议间隔 1.5-2 秒。
+
+解析出来的 `data` 大致 schema（服务端用 DeepSeek 按这份 prompt 抽取，字段名和 `POST /events`
+基本一一对应，不确定的字段会给空字符串/空数组，不会瞎编）：
+```json
+{
+  "title": "string，AI 已经按分类前缀规则加了【】标注，比如【日常】【上新】【赛季】【纪念】【配信】",
+  "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD",
+  "startTime": "HH:mm", "endTime": "HH:mm",
+  "timezone": "Asia/Tokyo | Asia/Shanghai | Asia/Singapore | ...",
+  "category": "offline|tournament|online|merch|release|in-game|distribution|season|daily|history",
+  "location": "string",
+  "link": "string，优先用原公告/推文链接",
+  "description": "string，格式固定是「原文\n\n[译文]\n\n中文翻译」",
+  "tags": ["中文标签", "原文标签", "..."],
+  "pokemon": ["Pikachu", "..."],
+  "products": [{ "name": "", "link": "", "imageUrl": "", "price": "", "releaseDate": "YYYY-MM-DD", "description": "" }],
+  "targets": [{ "type": "country|region|prefecture|city|group|place|brand|online|venue|coordinate", "id": "", "label": "", "address": "", "lat": null, "lng": null, "...": "见源码，还有 startDate/endDate/startTime/endTime/timezone/customDates/mapMode" }],
+  "venueSchedules": [{ "label": "", "address": "", "startDate": "", "endDate": "", "startTime": "", "endTime": "", "timezone": "", "customDates": [] }],
+  "imageUrls": ["string，从链接/推文媒体里提取到的图片"],
+  "iconUrl": "string",
+  "source": "official | unofficial",
+  "accountId": "string", "softwareIds": ["..."], "platformIds": ["..."]
+}
+```
+`targets`/`venueSchedules`/`products` 是给"一次公告涉及多个门店/多个商品/多个渠道"这种复杂情况用的，
+简单的单一活动通常只有 `location`/`startDate` 这些顶层字段有值，`targets` 为空——App 端表单可以先只
+接顶层这些常用字段，`targets`/`venueSchedules` 留到需要支持复杂公告的时候再接。
+
+### 4.2 只解析商品列表
+
+一次公告里有多个商品、只想单独重新解析商品部分时用（不会返回 title/date 等其他字段）：
+```http
+POST /parse-products
+{ "text": "string，必填" }
+→ { "success": true, "products": [{ "name": "", "link": "", "imageUrl": "", "price": "", "releaseDate": "", "description": "" }] }
+```
+需要服务端配置了 `DEEPSEEK_API_KEY`，没配置会返回 `400`（这条和 4.1 不一样，4.1 没配 key 也会
+400，但 4.1 走的是同一个检查，行为一致）。
+
+### 4.3 宝可梦名称/分组展开
+
+输入"关东御三家""伊布们"这种分组名，展开成具体宝可梦名称列表，`pokemon` 标签输入框可以配这个做
+智能联想：
+```http
+POST /expand-pokemon
+{ "text": "关东御三家" }
+→ { "pokemon": ["妙蛙种子", "小火龙", "杰尼龟"] }
+```
+没配置 `DEEPSEEK_API_KEY` 时会退化成简单的按空格/逗号/顿号切分（不报错，`pokemon` 数组就是原样切
+出来的词），App 端不需要特殊处理这个降级情况，正常展示返回的数组就行。
+
+### 4.4 翻译
+
+```http
+POST /translate
+{ "text": "string，必填，任意语言" }
+→ { "translated": "简体中文译文" }
+```
+统一翻译成简体中文，会尽量套用宝可梦官方译名术语表。
+
+### 4.5 链接预览（不调用 AI，纯抓取）
+
+粘贴一个链接时，先用这个轻量接口拿标题/图片做预览（比整段丢给 4.1 便宜很多），支持 X/Twitter、
+微博、Instagram、电商平台链接的针对性解析：
+```http
+POST /parse-link
+{ "url": "https://..." }
+→ { "title": "", "siteName": "", "imageUrl": "", "url": "规范化后的链接", "originalUrl": "原始输入", "commerce": { "platform": "", "itemId": "", "canonicalUrl": "", "onlineTarget": {} } }
+```
+抓取失败也会返回 `200`（只是字段是空的），不会报错中断流程，`commerce` 只有识别出是电商链接时才有。
+
+### 4.6 code example：粘贴文案 → 轮询解析 → 预填表单
+
+```ts
+async function parseEventDraft(text: string, token: string) {
+  const { jobId } = await fetch('https://pokeamice.com/event/api/parse-event-job', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  }).then(r => r.json());
+
+  // 轮询直到 done/error，10 分钟没结果视为超时
+  const deadline = Date.now() + 10 * 60_000;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 1800));
+    const res = await fetch(`https://pokeamice.com/event/api/parse-event-job/${jobId}`);
+    if (res.status === 202) continue; // 还在跑
+    const payload = await res.json();
+    if (!res.ok || !payload.success) throw new Error(payload.error || '解析失败');
+    return payload.data; // 直接拿去预填 POST /events 的表单
+  }
+  throw new Error('解析超时，请重试或手动填写');
+}
+```
+拿到 `data` 之后照抄进表单字段，让用户核对/修改，确认无误再调 §3.2 的 `POST /events` 正式提交——
+AI 解析结果**不会自动落库**，这一点和 3.1/3.2 是分开的两步，App 端不要跳过用户确认直接提交解析结果。
+
+---
+
+## 5. 小结：投稿类接口一览
 
 ```text
 game_gallery
@@ -371,8 +504,18 @@ event
   POST /event/api/events                       投稿宝事（普通用户，每天 10 条上限）
   POST /event/api/events/:id/participate       标记参与过（普通用户）
   POST /event/api/admin/place-groups           管理地点分组（仅管理员）
+  POST /event/api/parse-event(-job)            AI 一键解析投稿草稿（不需要登录，见 §4.1）
+  POST /event/api/parse-products               AI 只解析商品列表（不需要登录，见 §4.2）
+  POST /event/api/expand-pokemon               宝可梦分组名展开（不需要登录，见 §4.3）
+  POST /event/api/translate                    翻译（不需要登录，见 §4.4）
+  POST /event/api/parse-link                   链接预览，非 AI（不需要登录，见 §4.5）
 ```
 
 目前唯一没有实现方案的两个缺口：**game_gallery 投稿新截图**（§1.5，§18.2 有方案）、**tour 普通用户
 投稿新打卡点**（§2.5 末尾，§18.4 有方案）。event 的图片上传一开始误以为没有，核对代码后确认
 `POST /upload-image` 已经存在（走腾讯云 COS），已经在上面订正。需要实现哪个缺口告诉我，我再排期。
+
+另外提醒一点：§4 这一组 AI 解析接口**现状是不需要登录、也没有限流**，每次调用都实打实调用 DeepSeek
+付费 API——这是 event 现有代码的真实状态，不是我这次改的。App 端接入时务必自己做节流（比如按住按钮
+禁用、加个 debounce），不要指望服务端会挡；如果要在服务端也加上鉴权/限流，需要单独排期，不在这份
+文档的范围内。
