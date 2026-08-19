@@ -563,35 +563,85 @@ Authorization: Bearer <event token>   （和 game_gallery 验证的是同一套 
 
 `event/server.ts` 的 `authenticatedUsername()` 和 game_gallery 的 `gg_event_token_verify()` 认的是同一个 HMAC token 格式，App 端登录一次，两边都能用同一个 token。非管理员用户限流 10 条/天，提交后默认直接 `status: 'published'`（没有像 game_gallery 这样"先 pending 再共识确认"的审核门槛——这是 event 模块既有的设计，这次不建议顺带改动它）。App 端要做的只是照着这个已有接口实现表单，不涉及本仓库（game_gallery）的任何代码改动。
 
-### 18.4 投稿"地点"——需要你先确认指的是哪一个
+### 18.4 投稿"地点"——已确认指 tour 的新打卡点投稿，现状：只有管理员能写
 
-"地点"在这个生态里实际对应至少三套不同东西，实现方式完全不同，需要你先说清楚要哪个：
+已确认"地点"指 tour 模块（打卡旅图）里"出现新的宝可梦打卡点"这件事，对应 `custom_places` 表。
 
-1. **game_gallery 的"地点"标注分类**——给已有截图打地点标签，Phase 1 已经支持（`next_case`/`submit_case` 的 `category=地点`），App 直接调用现成端点即可，不需要新开发。
-2. **event 模块的地区/地点体系**（`/api/regions`、`/api/geocode`、`/api/place-groups`）——这套是"今日宝事"用来管理地区/地点的，看代码目前更像管理员/编辑向的维护接口，不是普通用户的"投稿"入口，要做成用户投稿需要额外设计审核流程。
-3. **tour 模块（打卡旅图）的地点打卡投稿**——`tour/server.ts` 已经有自己独立的一套 `submissions.json` + `POST /upload`（base64 上传、本地磁盘存储），是完全独立于 event 和 game_gallery 的第三个 Node 服务、第三套数据库。
+现状：`POST /custom-places`、`PUT /custom-places/:id` 已经存在，但是**管理员专属**（`tour/server.ts` 里 `req.user.role !== 'admin'` 直接 403），没有普通用户"投稿一个新地点，等审核"这条路径。和 §18.2 的投稿截图是同一类缺口——数据模型、写入端点都在，缺的是"面向普通用户的提交 + 待审核队列"这一层。
 
-这三个分属不同数据模型、不同数据库，甚至不同技术栈（tour 是独立 Node 服务）。在你确认具体是哪一个之前，不会去动 event 或 tour 的代码——目标不明确时先动手，改错方向的返工成本比现在问清楚要高得多。
+如果要做，建议直接复用 tour 现成的 `submissions`（打卡投稿）表的思路，而不是新建一套：新增一个 `place_proposals`（或类似）表存 `status='pending'`，普通用户 `POST` 进去，管理员在现有的 admin 后台里多一个"待审核地点"列表，通过后再写入正式的 `custom_places`。**这一节和 §18.2 一样先记录方案，暂不实现**，需要你确认要不要做、以及审核流程具体怎么走（谁审、多久提醒一次之类）。
 
 ### 18.5 小结：API 是否齐全
 
 ```text
-标注 / 排行榜 / 进度        齐全，App 可直接接（§18.1）
-投稿截图                    不齐全，是提案（§18.2），需要你拍板三个开放问题
-投稿宝事                    齐全，属于 event 模块现成接口（§18.3）
-投稿地点                    取决于你指哪一个（§18.4 三选一，也可能都要）
+标注 / 排行榜 / 进度         齐全，App 可直接接（§18.1）
+投稿截图                     暂缓，是提案（§18.2）
+投稿宝事                     齐全，属于 event 模块现成接口（§18.3）
+投稿新打卡点（地点）          缺"普通用户投稿+审核"这一层，是提案（§18.4），暂不实现
+标记"去过的地点"/"参与过的宝事"  齐全，已实现并上线（§20）
+账号系统（event/tour 合并）   齐全，已实现并上线（§20）
 ```
 
 ---
 
 ## 19. 关于"更新到 git 上"
 
-检查发现 `/www/wwwroot/pokeamice.com/.git` 目录存在但是空的——没有 `HEAD`、没有 `config`、没有 `objects`，`git status`/`git log` 都报"not a git repository"。这不是 `game_gallery` 单独的问题，整个 `pokeamice.com` 目录当前都没有一个可用的 git 仓库在跟踪代码，这次开发涉及的所有改动目前都只在磁盘上，没有版本历史。
+检查发现 `/www/wwwroot/pokeamice.com/.git` 目录存在但是空的——没有 `HEAD`、没有 `config`、没有 `objects`，`git status`/`git log` 都报"not a git repository"。这不是 `game_gallery` 单独的问题，整个 `pokeamice.com` 目录当前都没有一个可用的 git 仓库在跟踪代码。
 
-在帮你初始化之前需要确认三件事，避免一步走错：
+**已解决（2026-08-19）**：没有动那个空的父级 `.git`，改成在 `game_gallery/` 目录下单独 `git init` 一个仓库，`.gitignore` 排除了 `data/`、`backups/`、`staging/`、所有 `*.sqlite3`、增量包 zip 和 `.event_auth_secret.env`，只跟踪代码。之后接上了远程仓库 `https://github.com/Asimov2144/Poke-Amice`——远程当时只有一个占位 `README.md`，用 `--allow-unrelated-histories` 合并（保留了 README，没有丢内容），推到了 `main` 分支。以后 game_gallery 的改动要同步，正常 `git add`/`git commit`/`git push` 就行。
 
-1. 这台服务器上的代码本来是不是就没有用 git 管理（比如用别的方式部署/备份），这次是要**第一次初始化**一个新仓库；
-2. 还是本地或别处已经有一个远程仓库，这台服务器**应该 clone 它**、把现在磁盘上的改动合并进去，而不是新建一个和历史无关的孤立仓库（如果是这种情况，直接 `git init` 会导致以后接远程仓库时要处理一堆无意义的冲突，比现在问清楚麻烦得多）；
-3. 如果确定是新建，`data/*.sqlite3`、`backups/`、`corpus2.zip`、`server_db_delta_*.zip` 这些数据/备份文件是不是要排除在版本控制之外（`.gitignore`），只跟踪代码——这几个文件加起来体积不小，且本来就是运行时数据，通常不适合进 git。
+---
 
-告诉我怎么选，我就照着做。
+## 20. event / tour 账号合并 + "去过 / 参与过"标记（2026-08-19，已实现并部署）
+
+这一节严格说不属于 game_gallery，是同一次会话里顺带做的——记在这里是因为 §18 的 App 端功能盘点牵出了这件事，方便以后查。改动的是 `event/server.ts` 和 `tour/server.ts`，跑在 pm2 的 `poke-event`、`pokeamice-tour` 两个进程上。
+
+### 20.1 账号合并：event 是唯一权威来源
+
+背景：event 和 tour 原本是两套完全独立的账号体系——密码哈希算法一样（都是 `scryptSync(password, salt, 64)`），但存储格式不同（event 是 `scrypt$<salt>$<hash>`，tour 是 `<salt>:<hash>`），token 机制也不同（event 是无状态签名 token，tour 是存数据库的随机 token）。
+
+落地方案：
+
+```text
+event 新增  POST /api/admin/migrate-tour-accounts   （仅管理员）
+            只读 tour 的 pokeamice.db，把 username/email/passwordHash（格式转换后）
+            写进 event 的 preferences；用户名或邮箱冲突的账号跳过，不覆盖。
+
+tour 改造   /auth/login、/auth/register 改成服务端代理到 event 对应接口，
+            鉴权判断也改成校验 event 签发的 token（本地重算 HMAC，不需要每次
+            请求跨服务调用）。tour 自己的 users/submissions/custom_places/
+            activation_codes 表完全没动，只是"密码对不对"这件事以后由 event
+            说了算，tour 本地这份 users 行继续挂 submissions 等历史数据。
+
+            /auth/me 新增 needsEmail 字段（tour 迁移过来但邮箱是空的账号），
+            配合新增的 POST /auth/complete-email 让用户登录后补齐——同时写回
+            event（权威来源）和 tour 本地这份副本。
+```
+
+管理员角色不需要额外处理：tour 原有管理员就是 `asimov2144`，event 里 `asimov2144` 也已经是 `role: admin`，用户名对得上，自动就是同一个人。
+
+**部署记录**：2026-08-19 完成 build + pm2 restart，随后跑了一次迁移，tour 的 `RRR` 账号成功并入 event（`migratedFromTour: true`，密码哈希格式转换正确，原密码不变仍可登录），`asimov2144` 因为 event 已有同名账号被跳过（该账号此后统一用 event 密码登录 tour）。部署过程中发现一个真实的临时窗口期问题：迁移接口跑之前，只在 tour 本地存在、event 没有的账号会短暂登录不了 tour——已通过跑迁移解决，以后新用户走 event 注册就不会再遇到。
+
+前端没有改动：tour/event 各自页面的登录表单调用路径不变（还是各自原来的 `/auth/login`、`/api/login`），只是后端的校验逻辑换了权威来源，用户感知不到差异（除了上面提到的一次性迁移窗口期）。
+
+### 20.2 "去过的地点" / "参与过的宝事"
+
+App 端用来展示个人足迹/参与记录的需求，两边各自加了一组端点，数据存在各自现有的库里，没有新建跨服务的数据模型：
+
+```text
+tour（新表 place_visits，userId+placeId 主键）
+  POST   /api/places/:placeId/visit      标记去过
+  DELETE /api/places/:placeId/visit      取消标记
+  GET    /api/me/visited-places          列出自己去过的地点（placeId + 时间）
+
+event（复用现有 JSON 存储，新增 db.eventParticipation[username][eventId]=时间戳）
+  POST   /api/events/:id/participate     标记参与过
+  DELETE /api/events/:id/participate     取消标记
+  GET    /api/me/participated-events     列出自己参与过的宝事（完整 event 信息，不只是 id）
+```
+
+都要求 `Authorization: Bearer <event token>`（和登录用的是同一个 token）。**只有后端**——tour/event 各自页面目前没有"标记去过/参与过"的按钮去调用这几个接口，UI 部分是后续工作。
+
+### 20.3 还没做的：地点投稿的审核流程
+
+见 §18.4——`POST/PUT /custom-places` 已经存在但管理员专属，普通用户"投稿新打卡点 → 等审核"这条路径还没有，方案已经记录，等你确认要不要做。
