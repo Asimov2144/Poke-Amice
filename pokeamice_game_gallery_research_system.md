@@ -524,7 +524,9 @@ GET  api/v1/tagging/leaderboard.php
 
 App 端只需要照着这套端点实现一遍 UI（游戏选择卡片、同屏多字段问答、十题一轮、结算面板），数据格式和网页版共用同一套 `label_submissions`/`identity_stats`/`confirmed_annotations`，两端的进度、经验、排行榜是同一份数据，不会各算各的。`next_case.php` 返回的 `missing_fields` 数组、`submit_case.php` 要求的 `fields` 数组结构，App 端按同样的 JSON 形状实现即可，细节见 `api/v1/README.md` 和 `api/v1/openapi.yaml`。
 
-### 18.2 投稿截图——现在完全没有，需要新开发
+### 18.2 投稿截图——暂缓（2026-08-19 决定）
+
+下面这套方案先记录着，**暂时不实现**——已确认这次不需要。等以后要做的时候再回来看这一节。
 
 现状：game_gallery 没有任何"用户上传新截图"的入口。所有截图来自 Asimov2144 本地 OCR pipeline 手动导入 `data/site.sqlite3`（见 `DEPLOY.md`），没有面向普通用户的写路径。这个功能需要从零做。
 
