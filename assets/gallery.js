@@ -81,6 +81,13 @@
     history.replaceState(null, '', url);
   }
 
+  function setScreenshotUrl(id) {
+    const url = new URL(location.href);
+    if (id) url.searchParams.set('screenshot', String(id));
+    else url.searchParams.delete('screenshot');
+    history.replaceState(null, '', url);
+  }
+
   function card(item) {
     const button = document.createElement('button');
     const theme = gameTheme(item.game);
@@ -156,7 +163,9 @@
     try {
       let item = detailCache.get(String(id));
       if (!item) { ({ item } = await api({ action: 'detail', id })); detailCache.set(String(id), item); }
+      if (!els.modal.open) return;
       activeDetailId = Number(item.id);
+      setScreenshotUrl(activeDetailId);
       const revealImage = () => els.imageWrap.classList.remove('switching');
       els.image.addEventListener('load', revealImage, { once: true });
       els.image.src = item.preview_url || item.thumb_url; els.image.alt = item.text || item.game;
@@ -231,6 +240,7 @@
     }
   }
   function closeModal(dialog) { dialog.close(); if (!els.modal.open && !els.about.open && !els.corrections.open) document.body.style.overflow = ''; }
+  els.modal.addEventListener('close', () => { setScreenshotUrl(null); activeDetailId = 0; if (!els.about.open && !els.corrections.open) document.body.style.overflow = ''; });
   els.modalClose.addEventListener('click', () => closeModal(els.modal));
   els.modal.addEventListener('click', e => { if (e.target === els.modal) closeModal(els.modal); });
   els.copy.addEventListener('click', async () => { await navigator.clipboard.writeText(els.copy.dataset.text || ''); const old = els.copy.textContent; els.copy.textContent = '已复制'; setTimeout(() => els.copy.textContent = old, 1200); });
@@ -297,4 +307,6 @@
 
   const initial = new URLSearchParams(location.search); state.q = initial.get('q') || ''; state.game = initial.get('game') || ''; state.sort = ['random','story','terms','newest','oldest','id_asc','id_desc'].includes(initial.get('sort')) ? initial.get('sort') : 'random'; state.expandEvolution = initial.get('expand_evolution') === '1'; els.sort.value = state.sort; els.expandEvolutionToggle.checked = state.expandEvolution; els.input.value = state.q; els.form.classList.toggle('has-value', !!state.q); applyPageTheme(state.game); syncCompactHero();
   loadMeta(); load(true);
+  const directId = initial.get('screenshot') || '';
+  if (/^[1-9]\d{0,9}$/.test(directId)) openDetail(Number(directId));
 })();
