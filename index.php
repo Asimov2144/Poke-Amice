@@ -106,6 +106,6 @@
     <div class="summary-stats" id="correctionStats"></div>
     <div class="correction-list" id="correctionList"><p class="summary-loading">正在载入勘误记录…</p></div>
   </dialog>
-  <script src="assets/gallery.js?v=26" defer></script>
+  <script src="assets/gallery.js?v=31" defer></script>
 </body>
 </html>
