@@ -124,16 +124,22 @@
     if (!token) { setGuestIdentity(); return; }
     try {
       const response = await fetch('/event/api/me', { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
+      // 只有服务器明确说令牌无效（401）才清；5xx / 限流 / 断网保留令牌，下次刷新再试
+      if (response.status === 401) {
+        localStorage.removeItem('poke_auth_token');
+        setGuestIdentity();
+        return;
+      }
       const data = await response.json().catch(() => ({}));
       const username = data.preferences?.username;
-      if (!response.ok || !username) throw new Error('invalid');
+      if (!response.ok || !username) throw new Error('unavailable');
       state.identityKind = 'event_user';
       state.username = username;
       els.identityStatus.textContent = `已登录：${username}`;
       els.identityStatus.classList.add('logged-in');
       els.identityAction.textContent = '退出';
     } catch (_) {
-      localStorage.removeItem('poke_auth_token');
+      // 断网 / 超时 / 5xx：不动令牌，这次先显示游客状态
       setGuestIdentity();
     }
   }
