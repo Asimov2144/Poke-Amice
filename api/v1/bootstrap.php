@@ -435,6 +435,7 @@ function api_canonical_game(string $game): string
 {
     return match ($game) {
         '宝可梦传说 Z-A' => 'Pokémon LEGENDS Z-A',
+        '宝可梦传说 Z-A Nintendo Switch 2 Edition' => 'Pokémon LEGENDS Z-A',
         'Pokémon LEGENDS アルセウス' => '宝可梦传说 阿尔宙斯',
         'ポケットモンスター スカーレット' => '宝可梦 朱',
         'ポケットモンスター ソード' => '宝可梦 剑',
@@ -446,7 +447,7 @@ function api_canonical_game(string $game): string
 function api_game_variants(string $game): array
 {
     return match ($game) {
-        'Pokémon LEGENDS Z-A' => ['Pokémon LEGENDS Z-A', '宝可梦传说 Z-A'],
+        'Pokémon LEGENDS Z-A' => ['Pokémon LEGENDS Z-A', '宝可梦传说 Z-A', '宝可梦传说 Z-A Nintendo Switch 2 Edition'],
         '宝可梦传说 阿尔宙斯' => ['宝可梦传说 阿尔宙斯', 'Pokémon LEGENDS アルセウス'],
         '宝可梦 朱' => ['宝可梦 朱', 'ポケットモンスター スカーレット'],
         '宝可梦 剑' => ['宝可梦 剑', 'ポケットモンスター ソード'],

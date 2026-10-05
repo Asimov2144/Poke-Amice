@@ -15,6 +15,7 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const gameTheme = game => {
     if (game === 'Pokémon LEGENDS Z-A') return { key: 'za', label: 'Pokémon LEGENDS Z-A', icon: 'HOME_Legends_Z-A_icon.png' };
+    if (game === 'Pokémon Pokopia') return { key: 'pokopia', label: 'Pokémon Pokopia', icon: 'Pokopia_icon_v2.png' };
     if (game === 'Let\'s Go, Pikachu!') return { key: 'lets-go-pikachu', label: 'Pokémon: Let\'s Go, Pikachu!', icon: 'HOME_Let\'s_Go_Pikachu_icon.png' };
     if (game === '宝可梦传说 阿尔宙斯') return { key: 'arceus', label: '宝可梦传说 阿尔宙斯', icon: 'HOME_Legends_Arceus_icon.png' };
     if (game === 'Pokémon LEGENDS アルセウス') return { key: 'arceus', label: 'Pokémon LEGENDS アルセウス', icon: 'HOME_Legends_Arceus_icon.png' };
@@ -34,6 +35,53 @@
   };
   const storedLanguage = key => { try { return localStorage.getItem(key) || ''; } catch (_) { return ''; } };
   const storeLanguage = (key, value) => { try { localStorage.setItem(key, value); } catch (_) {} };
+  // 空结果 = 图库还没补到，不是台词不存在（EXP-0104）：给语料库出口和「请求补完」，并记录落空。
+  const CORPUS_URL = 'https://abcboy101.github.io/poke-corpus/';
+  const wantedKey = (q, game) => `gg-wanted:${game}|${q}`;
+  const postWanted = async (action, q, game) => {
+    const response = await fetch(new URL(`api.php?action=${action}`, location.href), {
+      method: 'POST', keepalive: true,
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q, game })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || '提交失败');
+    return data;
+  };
+  function renderEmptyState() {
+    const { q, game } = state;
+    if (!q) {
+      els.gallery.innerHTML = '<div class="empty-state"><strong>当前图库尚未收录这个作品的截图</strong>换个作品看看，或清除筛选。</div>';
+      return;
+    }
+    const requested = storedLanguage(wantedKey(q, game)) === '1';
+    const corpusHref = `${CORPUS_URL}#${new URLSearchParams({ query: q, run: 'true' })}`;
+    els.gallery.innerHTML = `<div class="empty-state wanted-state">
+      <strong>当前图库尚未收录这个场景</strong>
+      <p>图库目前只收录了部分作品的截图，搜不到不代表这句台词不存在。可以换个更短的词再试，或者去语料库查原文。</p>
+      <div class="wanted-actions">
+        <a class="wanted-action primary" href="${escapeHtml(corpusHref)}" target="_blank" rel="noopener noreferrer">去语料库继续搜索</a>
+        <button class="wanted-action" type="button" data-wanted-request${requested ? ' disabled' : ''}>${requested ? '已请求补完' : '请求补完'}</button>
+        ${game ? '<button class="wanted-action" type="button" data-wanted-clear>清除作品筛选再试</button>' : ''}
+      </div>
+      <p class="wanted-note" role="status">${requested ? '已记下，补图时会优先考虑这一条。' : ''}</p>
+    </div>`;
+    const root = els.gallery.firstElementChild;
+    const note = root.querySelector('.wanted-note');
+    root.querySelector('[data-wanted-request]').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true; note.textContent = '正在提交…';
+      try {
+        await postWanted('request_completion', q, game);
+        storeLanguage(wantedKey(q, game), '1');
+        button.textContent = '已请求补完'; note.textContent = '已记下，补图时会优先考虑这一条。';
+      } catch (error) {
+        button.disabled = false; note.textContent = `${error.message}，请稍后再试`;
+      }
+    });
+    root.querySelector('[data-wanted-clear]')?.addEventListener('click', () => { state.game = ''; applyPageTheme(''); setActiveFilter(); syncCompactHero(); updateUrl(); load(true); });
+    postWanted('log_miss', q, game).catch(() => {});
+  }
   function renderTranslationPair() {
     if (activeTranslations.length < 2) return;
     let left = els.translationLeft.value;
@@ -114,7 +162,7 @@
       els.reset.hidden = !(state.q || state.game);
       els.expandEvolutionLabel.hidden = !data.resolvedPokemon;
       if (data.resolvedPokemon) els.expandEvolutionLabel.lastChild.textContent = ` 含「${data.resolvedPokemon.pokemon_name}」进化/退化家族`;
-      if (!els.gallery.children.length) els.gallery.innerHTML = '<div class="empty-state"><strong>没有找到对应画面</strong>试试更短的词，或清除游戏筛选。</div>';
+      if (!els.gallery.children.length) renderEmptyState();
       els.load.hidden = !state.more;
     } catch (error) {
       els.load.hidden = false; els.load.innerHTML = `<span>${escapeHtml(error.message)}，点击重试</span>`; els.load.onclick = () => load(false);

@@ -76,6 +76,57 @@ function writeDb(): PDO
 }
 
 /**
+ * 「待补完」记录（EXP-0104）：空结果落空（search_miss）和「请求补完」点击（request_completion）。
+ * 单独一个库，不碰 site.sqlite3。访客只存按天轮换盐的哈希，不存 IP / UA；旧盐删掉后跨天无法关联。
+ */
+function wantedDb(): PDO
+{
+    static $pdo;
+    if ($pdo instanceof PDO) {
+        return $pdo;
+    }
+    $file = __DIR__ . '/data/wanted.sqlite3';
+    if (!is_dir(dirname($file)) || !is_writable(dirname($file))) {
+        fail('记录暂不可用', 503);
+    }
+    $pdo = new PDO('sqlite:' . $file, null, null, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_TIMEOUT => 3,
+    ]);
+    $pdo->exec('PRAGMA busy_timeout = 3000;');
+    $pdo->exec(<<<'SQL'
+        CREATE TABLE IF NOT EXISTS wanted_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            query TEXT NOT NULL,
+            game TEXT NOT NULL DEFAULT '',
+            visitor TEXT NOT NULL,
+            day TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            UNIQUE (kind, query, game, visitor, day)
+        );
+        CREATE INDEX IF NOT EXISTS idx_wanted_events_kind_query ON wanted_events(kind, query);
+        CREATE INDEX IF NOT EXISTS idx_wanted_events_visitor_day ON wanted_events(visitor, day);
+        CREATE TABLE IF NOT EXISTS visitor_salts (
+            day TEXT PRIMARY KEY,
+            salt TEXT NOT NULL
+        );
+    SQL);
+    return $pdo;
+}
+
+function wantedVisitor(PDO $db, string $day): string
+{
+    $db->prepare('DELETE FROM visitor_salts WHERE day < ?')->execute([$day]);
+    $db->prepare('INSERT OR IGNORE INTO visitor_salts (day, salt) VALUES (?, ?)')->execute([$day, bin2hex(random_bytes(16))]);
+    $stmt = $db->prepare('SELECT salt FROM visitor_salts WHERE day = ?');
+    $stmt->execute([$day]);
+    $fingerprint = ($_SERVER['REMOTE_ADDR'] ?? '') . "\n" . ($_SERVER['HTTP_USER_AGENT'] ?? '');
+    return substr(hash_hmac('sha256', $fingerprint, (string)$stmt->fetchColumn()), 0, 16);
+}
+
+/**
  * 人工标注众包库（api/v1/tagging/*.php 写入）的只读连接，供 detail 附带展示"社区标注"用。
  * 表结构由 api/v1/bootstrap.php 的 api_tagging_db() 负责创建；这里不建表，文件不存在或
  * confirmed_annotations 还没建出来（consensus job 没跑过）时静默返回 null，不影响截图详情主体。
@@ -278,6 +329,7 @@ function canonicalGame(string $game): string
 {
     return match ($game) {
         '宝可梦传说 Z-A' => 'Pokémon LEGENDS Z-A',
+        '宝可梦传说 Z-A Nintendo Switch 2 Edition' => 'Pokémon LEGENDS Z-A',
         'Pokémon LEGENDS アルセウス' => '宝可梦传说 阿尔宙斯',
         'ポケットモンスター スカーレット' => '宝可梦 朱',
         'ポケットモンスター ソード' => '宝可梦 剑',
@@ -289,7 +341,7 @@ function canonicalGame(string $game): string
 function gameVariants(string $game): array
 {
     return match ($game) {
-        'Pokémon LEGENDS Z-A' => ['Pokémon LEGENDS Z-A', '宝可梦传说 Z-A'],
+        'Pokémon LEGENDS Z-A' => ['Pokémon LEGENDS Z-A', '宝可梦传说 Z-A', '宝可梦传说 Z-A Nintendo Switch 2 Edition'],
         '宝可梦传说 阿尔宙斯' => ['宝可梦传说 阿尔宙斯', 'Pokémon LEGENDS アルセウス'],
         '宝可梦 朱' => ['宝可梦 朱', 'ポケットモンスター スカーレット'],
         '宝可梦 剑' => ['宝可梦 剑', 'ポケットモンスター ソード'],
@@ -389,6 +441,29 @@ try {
         $insert = $reportDb->prepare('INSERT INTO correction_reports (screenshot_id, category, original_text, suggested_text, description, contact, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, "pending", ?, ?)');
         $insert->execute([$id, $category, (string)$screenshot['text'], $suggestedText, $description, $contact, $now, $now]);
         respond(['ok' => true, 'id' => (int)$reportDb->lastInsertId()]);
+    }
+
+    if ($action === 'log_miss' || $action === 'request_completion') {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            fail('请使用提交方式发送', 405);
+        }
+        $body = requestBody();
+        $query = cleanedQuery((string)($body['q'] ?? ''));
+        if ($query === '') {
+            fail('缺少搜索词');
+        }
+        $game = reportText($body['game'] ?? '', 80);
+        $wanted = wantedDb();
+        $day = date('Y-m-d');
+        $visitor = wantedVisitor($wanted, $day);
+        $countStmt = $wanted->prepare('SELECT COUNT(*) FROM wanted_events WHERE visitor = ? AND day = ?');
+        $countStmt->execute([$visitor, $day]);
+        if ((int)$countStmt->fetchColumn() >= 60) {
+            respond(['ok' => true, 'recorded' => false]);
+        }
+        $insert = $wanted->prepare('INSERT OR IGNORE INTO wanted_events (kind, query, game, visitor, day, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+        $insert->execute([$action === 'log_miss' ? 'search_miss' : 'request_completion', $query, $game, $visitor, $day, microtime(true)]);
+        respond(['ok' => true, 'recorded' => $insert->rowCount() > 0]);
     }
 
     if ($action === 'detail') {

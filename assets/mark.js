@@ -29,6 +29,7 @@
   // 作品图标/主题色：和 gallery.js 里的同名函数保持一致，两边各自一份 IIFE，不共享模块。
   const gameTheme = game => {
     if (game === 'Pokémon LEGENDS Z-A') return { key: 'za', label: 'Pokémon LEGENDS Z-A', icon: 'HOME_Legends_Z-A_icon.png' };
+    if (game === 'Pokémon Pokopia') return { key: 'pokopia', label: 'Pokémon Pokopia', icon: 'Pokopia_icon_v2.png' };
     if (game === 'Let\'s Go, Pikachu!') return { key: 'lets-go-pikachu', label: 'Pokémon: Let\'s Go, Pikachu!', icon: 'HOME_Let\'s_Go_Pikachu_icon.png' };
     if (game === '宝可梦传说 阿尔宙斯') return { key: 'arceus', label: '宝可梦传说 阿尔宙斯', icon: 'HOME_Legends_Arceus_icon.png' };
     if (game === 'Pokémon LEGENDS アルセウス') return { key: 'arceus', label: 'Pokémon LEGENDS アルセウス', icon: 'HOME_Legends_Arceus_icon.png' };

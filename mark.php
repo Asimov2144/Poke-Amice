@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="assets/snap3-logo.png">
   <title>人工标注｜宝可梦友会 Game Snapshot</title>
   <link rel="preconnect" href="https://gallery.pokeamice.com" crossorigin>
-  <link rel="stylesheet" href="assets/gallery.css?v=27">
+  <link rel="stylesheet" href="assets/gallery.css?v=29">
   <link rel="stylesheet" href="assets/mark.css?v=7">
 </head>
 <body class="mark-page">
@@ -168,6 +168,6 @@
     <div class="leaderboard-me" id="leaderboardMe" hidden></div>
   </dialog>
 
-  <script src="assets/mark.js?v=6" defer></script>
+  <script src="assets/mark.js?v=8" defer></script>
 </body>
 </html>

@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="assets/snap3-logo.png">
   <title>宝可梦友会 Game Snapshot｜游戏截图搜索</title>
   <link rel="preconnect" href="https://gallery.pokeamice.com" crossorigin>
-  <link rel="stylesheet" href="assets/gallery.css?v=27">
+  <link rel="stylesheet" href="assets/gallery.css?v=30">
 </head>
 <body>
   <header class="topbar">
@@ -18,7 +18,7 @@
       <nav class="site-nav" aria-label="宝可梦友会站点导航">
         <a href="https://pokeamice.com/" target="_blank" rel="noopener noreferrer"><img src="/icon/asimov/logo.png" alt=""><span><small>主站</small>宝可梦友会</span></a>
         <a href="https://pokeamice.com/event/" target="_blank" rel="noopener noreferrer"><img src="/event/app-icon-192.png" alt=""><span><small>Event</small>今日宝事</span></a>
-        <a href="https://pokeamice.com/tour/" target="_blank" rel="noopener noreferrer"><img src="/tour/app-icon-192.png" alt=""><span><small>Tour</small>打卡旅图</span></a>
+        <a href="https://pokeamice.com/tour/" target="_blank" rel="noopener noreferrer"><img src="assets/tour-icon.png" alt=""><span><small>Tour</small>打卡旅图</span></a>
       </nav>
       <span class="topbar-divider" aria-hidden="true"></span>
       <a class="author-link" href="https://weibo.com/u/6306512172" target="_blank" rel="noopener noreferrer" aria-label="在微博查看作者 Asimov2144">
@@ -106,6 +106,6 @@
     <div class="summary-stats" id="correctionStats"></div>
     <div class="correction-list" id="correctionList"><p class="summary-loading">正在载入勘误记录…</p></div>
   </dialog>
-  <script src="assets/gallery.js?v=26" defer></script>
+  <script src="assets/gallery.js?v=32" defer></script>
 </body>
 </html>
